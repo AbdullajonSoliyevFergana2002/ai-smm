@@ -130,6 +130,12 @@
             <textarea id="generated-text" rows="7"
                 class="w-full rounded-xl p-3 text-sm bg-[var(--tg-bg)] border border-gray-300/40 focus:outline-none focus:ring-2 focus:ring-[var(--tg-link)]"></textarea>
 
+            {{-- Matnni clipboard'ga nusxalash --}}
+            <button id="copy-btn" type="button"
+                class="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-[#232e3c] text-blue-400 border border-blue-500/20 hover:bg-blue-500/10 transition-all w-fit mt-2 ml-auto">
+                <span id="copy-label">📋 Matnni nusxalash</span>
+            </button>
+
             <label class="block text-sm font-medium pt-1">Kanal ID</label>
             <input id="channel-id" type="text" placeholder="@kanal_username yoki -100..."
                 class="w-full rounded-xl p-3 text-sm bg-[var(--tg-bg)] border border-gray-300/40 focus:outline-none focus:ring-2 focus:ring-[var(--tg-link)]">
@@ -204,12 +210,17 @@
 
         // Joylashuv (layout) klasslari — har doim bir xil bo'ladi (grid hujayrasi),
         // faqat fon/matn rangi (STATE_*) almashadi, shuning uchun tugma "sakramaydi".
+        // uppercase/tracking-wider/font-bold har ikkala holatda ham bor — shuning uchun
+        // active<->inactive almashganda matn eni o'zgarmaydi (tugma sakramaydi).
         const CAT_LAYOUT  = 'cat-chip flex items-center justify-center gap-2 px-3 py-3 rounded-xl text-xs font-bold uppercase tracking-wider w-full min-h-[48px] text-center border border-transparent transition-all duration-200 whitespace-normal';
-        const MOOD_LAYOUT = 'tone-btn flex items-center justify-center gap-2 p-3 rounded-xl text-xs font-bold w-full min-h-[48px] text-center border border-transparent transition-all duration-200 whitespace-normal';
+        const MOOD_LAYOUT = 'tone-btn flex items-center justify-center gap-2 p-3 rounded-xl text-xs font-bold uppercase tracking-wider w-full min-h-[48px] text-center border border-transparent transition-all duration-200 whitespace-normal';
 
         // Active/Inactive holat — faqat fon va matn rangi o'zgaradi (o'lcham emas).
-        const STATE_ACTIVE   = ['bg-blue-600', 'text-white', 'shadow-md'];
-        const STATE_INACTIVE = ['bg-[#232e3c]', 'text-gray-300'];
+        // Active: ko'k fon + DOIM oppoq matn (!text-white — mavzu rangini bosib o'tadi).
+        // Inactive: qorong'u fon + DOIM ravshan oqish matn (text-slate-200) — hech qachon
+        // qora/xira bo'lib qolmaydi.
+        const STATE_ACTIVE   = ['bg-blue-600', '!text-white', 'shadow-md'];
+        const STATE_INACTIVE = ['bg-[#232e3c]', 'text-slate-200'];
         function setBtnState(el, isActive) {
             el.classList.remove(...STATE_ACTIVE, ...STATE_INACTIVE);
             el.classList.add(...(isActive ? STATE_ACTIVE : STATE_INACTIVE));
@@ -496,6 +507,41 @@
             }
         });
 
+        // --- 3. Matnni nusxalash (Copy to clipboard) ---
+        const copyBtn = document.getElementById('copy-btn');
+        const copyLabel = document.getElementById('copy-label');
+        const COPY_DEFAULT = '📋 Matnni nusxalash';
+        let copyResetTimer = null;
+
+        async function copyGeneratedText() {
+            const text = generatedText.value;
+            if (!text.trim()) return;
+
+            try {
+                if (navigator.clipboard?.writeText) {
+                    await navigator.clipboard.writeText(text);
+                } else {
+                    // Eski/cheklangan WebView uchun zaxira usul.
+                    generatedText.removeAttribute('readonly');
+                    generatedText.focus();
+                    generatedText.setSelectionRange(0, text.length);
+                    document.execCommand('copy');
+                    generatedText.setSelectionRange(0, 0);
+                    generatedText.blur();
+                }
+                copyLabel.textContent = '✅ Nusxalandi!';
+                if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+            } catch (e) {
+                copyLabel.textContent = '⚠️ Nusxalanmadi';
+            }
+
+            // 2 soniyadan keyin tugma matni eski holatiga silliq qaytadi.
+            clearTimeout(copyResetTimer);
+            copyResetTimer = setTimeout(() => { copyLabel.textContent = COPY_DEFAULT; }, 2000);
+        }
+
+        copyBtn.addEventListener('click', copyGeneratedText);
+
         // --- Bosilish effekti (iOS/Telegram WebView'da :active ishonchsiz, shuning uchun JS bilan) ---
         function bindPressOne(el) {
             const press = () => el.classList.add('is-pressed');
@@ -514,6 +560,7 @@
         }
         bindPressEffect('.tg-btn');
         bindPressEffect('.upload-box');
+        bindPressOne(copyBtn);
         // .cat-chip va .tone-btn dinamik yaratilgani uchun ular render paytida ulanadi.
     </script>
 </body>
