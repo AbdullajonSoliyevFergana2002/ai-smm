@@ -52,42 +52,11 @@
             transform: scale(0.96);
         }
 
-        /* Ohang (Mood) tugmalari — o'lcham/joylashuv Tailwind klasslarida.
-           Bu yerda faqat RANG (fon/matn) va effektlar; shuning uchun active<->inactive
-           almashganda tugma "sakramaydi" (o'lchami o'zgarmaydi). */
-        .tone-btn {
-            background-color: rgba(127, 127, 127, .15); /* tanlanmagan: to'q fon */
-            color: var(--tg-text);
-            border: 1px solid transparent;
-            transition: background-color .2s ease, color .2s ease, filter .1s ease, transform .1s ease;
-        }
-        /* Tanlangan ohang: yorqin ko'k (theme button rangi) + oq matn.
-           font-weight o'zgarmaydi — aks holda matn eni o'zgarib tugma sakraydi. */
-        .tone-btn.tone-active {
-            background-color: var(--tg-button);
-            color: var(--tg-button-text);
-        }
-        .tone-btn.is-pressed,
-        .tone-btn:active { filter: brightness(0.85); transform: scale(0.96); }
-
-        /* Kategoriya chip'lari — o'lcham/joylashuv Tailwind klasslarida.
-           Bu yerda faqat rang va effektlar. */
-        .cat-chip {
-            background-color: rgba(127, 127, 127, .15);
-            color: var(--tg-text);
-            border: 1px solid transparent;
-            transition: background-color .2s ease, color .2s ease, filter .1s ease, transform .1s ease;
-        }
-        .cat-chip.chip-active {
-            background-color: var(--tg-button);
-            color: var(--tg-button-text);
-        }
-        .cat-chip.is-pressed,
-        .cat-chip:active { filter: brightness(0.85); transform: scale(0.96); }
-
-        /* Gorizontal scroll'dagi xunuk scrollbar chizig'ini yashiramiz */
-        .scrollbar-none { -ms-overflow-style: none; scrollbar-width: none; }
-        .scrollbar-none::-webkit-scrollbar { display: none; }
+        /* Kategoriya / Kayfiyat tugmalari — rang, o'lcham va joylashuv butunlay Tailwind
+           klasslarida (grid + bg-*/text-*). Bu yerda faqat bosilish (press) effekti qoladi;
+           u tugma o'lchamini o'zgartirmaydi (faqat transform/filter). */
+        .tone-btn.is-pressed,  .tone-btn:active,
+        .cat-chip.is-pressed,  .cat-chip:active { filter: brightness(0.9); transform: scale(0.97); }
 
         /* Rasm yuklash maydoni */
         .upload-box { transition: filter .1s ease, transform .1s ease; }
@@ -106,7 +75,7 @@
     </style>
 </head>
 <body class="min-h-screen">
-    <main class="max-w-[480px] mx-auto w-full px-4 py-4 space-y-5">
+    <main class="max-w-[440px] mx-auto w-full px-3 pt-2 pb-6 space-y-5">
 
         <header class="text-center pt-2">
             <h1 class="text-2xl font-bold">🪄 AI-SMM</h1>
@@ -116,7 +85,7 @@
         {{-- Kategoriyalar (gorizontal chips, JS bilan chiziladi) --}}
         <section class="tg-card rounded-2xl p-4 space-y-3">
             <label class="block text-sm font-medium">Kategoriya</label>
-            <div class="flex overflow-x-auto whitespace-nowrap gap-2 pb-2 scrollbar-none -mx-1 px-1" id="category-group"></div>
+            <div class="grid grid-cols-2 gap-2.5 w-full" id="category-group"></div>
         </section>
 
         {{-- Rasm yuklash maydoni --}}
@@ -136,7 +105,7 @@
         {{-- Matn ohangi / Kayfiyat (kategoriyaga qarab JS bilan dinamik chiziladi) --}}
         <section class="tg-card rounded-2xl p-4 space-y-3">
             <label class="block text-sm font-medium">Matn ohangi / Kayfiyat</label>
-            <div class="grid grid-cols-3 gap-3 w-full" id="mood-group"></div>
+            <div class="grid grid-cols-2 gap-2.5 w-full" id="mood-group"></div>
         </section>
 
         {{-- Qisqacha izoh (ixtiyoriy) --}}
@@ -233,10 +202,18 @@
         let selectedCategory = Object.keys(categories)[0]; // default: birinchi kategoriya
         let selectedMood = null;
 
-        // Joylashuv (layout) klasslari — har doim bir xil bo'ladi, faqat rang (.cat-chip/.tone-active)
-        // o'zgaradi, shuning uchun tugma active<->inactive almashganda "sakramaydi".
-        const CAT_LAYOUT  = 'cat-chip flex items-center justify-center gap-2 px-4 py-2.5 rounded-full shrink-0 text-sm font-medium whitespace-nowrap';
-        const MOOD_LAYOUT = 'tone-btn flex flex-col sm:flex-row items-center justify-center text-center gap-1.5 p-3 rounded-xl text-sm font-medium w-full min-h-[54px]';
+        // Joylashuv (layout) klasslari — har doim bir xil bo'ladi (grid hujayrasi),
+        // faqat fon/matn rangi (STATE_*) almashadi, shuning uchun tugma "sakramaydi".
+        const CAT_LAYOUT  = 'cat-chip flex items-center justify-center gap-2 px-3 py-3 rounded-xl text-xs font-bold uppercase tracking-wider w-full min-h-[48px] text-center border border-transparent transition-all duration-200 whitespace-normal';
+        const MOOD_LAYOUT = 'tone-btn flex items-center justify-center gap-2 p-3 rounded-xl text-xs font-bold w-full min-h-[48px] text-center border border-transparent transition-all duration-200 whitespace-normal';
+
+        // Active/Inactive holat — faqat fon va matn rangi o'zgaradi (o'lcham emas).
+        const STATE_ACTIVE   = ['bg-blue-600', 'text-white', 'shadow-md'];
+        const STATE_INACTIVE = ['bg-[#232e3c]', 'text-gray-300'];
+        function setBtnState(el, isActive) {
+            el.classList.remove(...STATE_ACTIVE, ...STATE_INACTIVE);
+            el.classList.add(...(isActive ? STATE_ACTIVE : STATE_INACTIVE));
+        }
 
         // "💰 Sotuvchi" kabi matnni emoji va yozuvga ajratadi (birinchi probelgacha — emoji).
         function splitEmoji(str) {
@@ -257,7 +234,8 @@
             Object.entries(categories).forEach(([key, cat]) => {
                 const chip = document.createElement('button');
                 chip.type = 'button';
-                chip.className = CAT_LAYOUT + (key === selectedCategory ? ' chip-active' : '');
+                chip.className = CAT_LAYOUT;
+                setBtnState(chip, key === selectedCategory);
                 chip.innerHTML = emojiLabelHtml(cat.name);
                 chip.dataset.key = key;
                 chip.addEventListener('click', () => {
@@ -280,13 +258,14 @@
             moods.forEach((mood) => {
                 const btn = document.createElement('button');
                 btn.type = 'button';
-                btn.className = MOOD_LAYOUT + (mood === selectedMood ? ' tone-active' : '');
+                btn.className = MOOD_LAYOUT;
+                setBtnState(btn, mood === selectedMood);
                 btn.innerHTML = emojiLabelHtml(mood);
                 btn.dataset.mood = mood;
                 btn.addEventListener('click', () => {
                     selectedMood = mood;
                     moodGroup.querySelectorAll('.tone-btn').forEach((b) => {
-                        b.classList.toggle('tone-active', b.dataset.mood === selectedMood);
+                        setBtnState(b, b.dataset.mood === selectedMood);
                     });
                     if (tg?.HapticFeedback) tg.HapticFeedback.selectionChanged();
                 });
