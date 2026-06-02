@@ -17,23 +17,27 @@ class PostController extends Controller
     public function generate(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'image' => ['required', 'image', 'mimes:jpeg,jpg,png,webp', 'max:8192'], // maks. 8 MB
+            'image' => ['required', 'image', 'mimes:jpeg,jpg,png,webp', 'max:51200'],     // to'liq sifatli (kanal), maks. 50 MB
+            'ai_image' => ['nullable', 'image', 'mimes:jpeg,jpg,png,webp', 'max:8192'],   // Gemini uchun kichik nusxa
             'tone' => ['required', 'string', 'max:50'],
             'additional_info' => ['nullable', 'string', 'max:500'],
         ]);
 
-        // 1. Rasmni storage/app/public/posts ga saqlaymiz va yangi yozuv yaratamiz.
         $imageFile = $request->file('image');
+
+        // 1. Gemini tahlili uchun manba: kichik nusxa bo'lsa o'shani, aks holda asl rasmni ishlatamiz.
+        //    store() vaqtinchalik faylni KO'CHIRADI, shuning uchun base64 ni saqlashdan OLDIN o'qiymiz.
+        $geminiSource = $request->file('ai_image') ?? $imageFile;
+        $base64Image = base64_encode(file_get_contents($geminiSource->getRealPath()));
+        $mimeType = $geminiSource->getMimeType();
+
+        // 2. To'liq sifatli rasmni saqlaymiz — kanalga AYNAN shu yuboriladi (sifat buzilmaydi).
         $path = $imageFile->store('posts', 'public');
 
         $post = $request->user()->posts()->create([
             'image_path' => $path,
             'status' => 'pending',
         ]);
-
-        // 2. Rasmni Base64 ga o'giramiz.
-        $base64Image = base64_encode(Storage::disk('public')->get($path));
-        $mimeType = $imageFile->getMimeType();
 
         // 3. tone asosida prompt tuzamiz.
         $tone = $validated['tone'];

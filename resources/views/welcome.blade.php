@@ -346,15 +346,19 @@
             setLoading(generateBtn, true);
             messageBox.classList.add('hidden');
 
-            const kb = (b) => Math.round(b / 1024) + ' KB';
-
             try {
-                // DIAGNOSTIKA: kichraytirishdan oldin/keyin hajm.
-                const file = await compressImage(original);
-                showMessage('Yuborilmoqda… (' + kb(original.size) + ' → ' + kb(file.size) + ', ' + file.type + ')');
+                // KANALGA: to'liq sifatli rasm. HEIC bo'lsa yuqori sifatli JPEG ga aylantiriladi
+                // (o'lcham/sifat kamaymaydi), JPEG/PNG bo'lsa asl fayl o'zgarishsiz qoladi.
+                const fullImage = await ensureDecodable(original);
+
+                // GEMINI uchun: kichik, siqilgan nusxa (sifat muhim emas — faqat matn yaratish uchun).
+                const aiImage = await compressImage(fullImage, 1024, 0.7);
+
+                showMessage('Yuborilmoqda…');
 
                 const formData = new FormData();
-                formData.append('image', file);
+                formData.append('image', fullImage);   // to'liq sifatli — kanalga shu ketadi
+                formData.append('ai_image', aiImage);  // kichik nusxa — Gemini tahlili uchun
                 formData.append('tone', tone);
 
                 // Ixtiyoriy qisqacha izoh (bo'sh bo'lmasa yuboramiz).
@@ -371,9 +375,8 @@
                         body: formData,
                     });
                 } catch (netErr) {
-                    // fetch o'zi yiqildi — tarmoq/SSL/CORS muammosi.
-                    showMessage('Tarmoq xatosi: ' + (netErr?.message || netErr)
-                        + ' | URL: ' + location.origin, true);
+                    // fetch o'zi yiqildi — tarmoq/SSL muammosi.
+                    showMessage('Tarmoq xatosi. Qayta urinib ko\'ring.', true);
                     return;
                 }
 
@@ -381,10 +384,9 @@
 
                 if (!res.ok) {
                     if (res.status === 413) {
-                        showMessage('Rasm server uchun katta (413). Hajm: ' + kb(file.size), true);
+                        showMessage('Rasm hajmi juda katta. Kichikroq rasm tanlang.', true);
                     } else {
-                        showMessage('Server xatosi (kod: ' + res.status + '): '
-                            + (data.message || 'noma\'lum'), true);
+                        showMessage(data.message || ('Xatolik yuz berdi (kod: ' + res.status + ')'), true);
                     }
                     return;
                 }
