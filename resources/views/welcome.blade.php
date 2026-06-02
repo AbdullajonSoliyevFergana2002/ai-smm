@@ -269,25 +269,40 @@
 
             setLoading(generateBtn, true);
             messageBox.classList.add('hidden');
+
+            const kb = (b) => Math.round(b / 1024) + ' KB';
+
             try {
+                // DIAGNOSTIKA: kichraytirishdan oldin/keyin hajm.
                 const file = await compressImage(original);
+                showMessage('Yuborilmoqda… (' + kb(original.size) + ' → ' + kb(file.size) + ', ' + file.type + ')');
 
                 const formData = new FormData();
                 formData.append('image', file);
                 formData.append('tone', tone);
 
-                const res = await fetch('/api/posts/generate', {
-                    method: 'POST',
-                    headers: tgHeaders(),     // FormData uchun Content-Type ni brauzer o'zi qo'yadi
-                    body: formData,
-                });
+                let res;
+                try {
+                    res = await fetch('/api/posts/generate', {
+                        method: 'POST',
+                        headers: tgHeaders(),     // FormData uchun Content-Type ni brauzer o'zi qo'yadi
+                        body: formData,
+                    });
+                } catch (netErr) {
+                    // fetch o'zi yiqildi — tarmoq/SSL/CORS muammosi.
+                    showMessage('Tarmoq xatosi: ' + (netErr?.message || netErr)
+                        + ' | URL: ' + location.origin, true);
+                    return;
+                }
+
                 const data = await parseJsonSafe(res);
 
                 if (!res.ok) {
                     if (res.status === 413) {
-                        showMessage('Rasm hajmi juda katta. Kichikroq rasm tanlang.', true);
+                        showMessage('Rasm server uchun katta (413). Hajm: ' + kb(file.size), true);
                     } else {
-                        showMessage(data.message || ('Xatolik (kod: ' + res.status + ')'), true);
+                        showMessage('Server xatosi (kod: ' + res.status + '): '
+                            + (data.message || 'noma\'lum'), true);
                     }
                     return;
                 }
@@ -298,7 +313,7 @@
                 resultSection.scrollIntoView({ behavior: 'smooth' });
                 showMessage('Matn tayyor! Tahrirlab, kanalga joylashingiz mumkin.');
             } catch (e) {
-                showMessage('Tarmoq xatosi. Qayta urinib ko\'ring.', true);
+                showMessage('Kutilmagan xato: ' + (e?.name || '') + ' ' + (e?.message || e), true);
             } finally {
                 setLoading(generateBtn, false);
             }
