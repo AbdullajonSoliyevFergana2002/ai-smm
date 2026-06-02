@@ -36,20 +36,28 @@
         .tg-btn {
             background-color: var(--tg-button);
             color: var(--tg-button-text);
-            transition: filter .12s ease, transform .12s ease;
+            transition: filter .1s ease, transform .1s ease;
         }
         .tg-btn:disabled { opacity: .55; cursor: not-allowed; }
-        /* Bosilganda: to'qroq rang + biroz kichrayish (har qanday theme rangida ishlaydi) */
+
+        /* Bosilgan holat — JS orqali .is-pressed klassi qo'shiladi
+           (iOS/Telegram WebView'da :active ishonchsiz ishlagani uchun).
+           :active ham fallback sifatida qoldirildi. */
+        .tg-btn:not(:disabled).is-pressed,
         .tg-btn:not(:disabled):active {
-            filter: brightness(0.82);
-            transform: scale(0.97);
+            filter: brightness(0.75);
+            transform: scale(0.96);
         }
 
-        /* Ohang tugmalari va rasm maydoni bosilganda ham sezilsin */
-        .tone-option span { transition: filter .12s ease, transform .12s ease; }
-        .tone-option:active span { filter: brightness(0.9); transform: scale(0.97); }
-        .upload-box { transition: filter .12s ease, transform .12s ease; }
-        .upload-box:active { filter: brightness(0.95); transform: scale(0.99); }
+        /* Ohang tugmalari */
+        .tone-option span { transition: filter .1s ease, transform .1s ease; }
+        .tone-option.is-pressed span,
+        .tone-option:active span { filter: brightness(0.85); transform: scale(0.96); }
+
+        /* Rasm yuklash maydoni */
+        .upload-box { transition: filter .1s ease, transform .1s ease; }
+        .upload-box.is-pressed,
+        .upload-box:active { filter: brightness(0.92); transform: scale(0.99); }
 
         /* Loading spinner */
         .spinner {
@@ -100,7 +108,7 @@
         </section>
 
         {{-- Matn yaratish tugmasi --}}
-        <button id="generate-btn" class="tg-btn w-full rounded-xl py-3 font-semibold flex items-center justify-center gap-2 transition active:scale-95">
+        <button id="generate-btn" class="tg-btn w-full rounded-xl py-3 font-semibold flex items-center justify-center gap-2">
             <span id="generate-spinner" class="spinner hidden"></span>
             <span id="generate-label">✨ Matn yaratish</span>
         </button>
@@ -116,7 +124,7 @@
                 class="w-full rounded-xl p-3 text-sm bg-[var(--tg-bg)] border border-gray-300/40 focus:outline-none focus:ring-2 focus:ring-[var(--tg-link)]">
 
             {{-- Kanalga joylash tugmasi --}}
-            <button id="publish-btn" class="tg-btn w-full rounded-xl py-3 font-semibold flex items-center justify-center gap-2 transition active:scale-95">
+            <button id="publish-btn" class="tg-btn w-full rounded-xl py-3 font-semibold flex items-center justify-center gap-2">
                 <span id="publish-spinner" class="spinner hidden"></span>
                 <span id="publish-label">🚀 Kanalga joylash</span>
             </button>
@@ -332,6 +340,25 @@
                 setLoading(publishBtn, false);
             }
         });
+
+        // --- Bosilish effekti (iOS/Telegram WebView'da :active ishonchsiz, shuning uchun JS bilan) ---
+        function bindPressEffect(selector) {
+            document.querySelectorAll(selector).forEach((el) => {
+                const press = () => el.classList.add('is-pressed');
+                const release = () => el.classList.remove('is-pressed');
+                el.addEventListener('pointerdown', press);
+                el.addEventListener('pointerup', release);
+                el.addEventListener('pointerleave', release);
+                el.addEventListener('pointercancel', release);
+                // Yengil tebranish (qo'llab-quvvatlasa) — bosilgani "his qilinsin"
+                el.addEventListener('pointerdown', () => {
+                    if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+                });
+            });
+        }
+        bindPressEffect('.tg-btn');
+        bindPressEffect('.tone-option');
+        bindPressEffect('.upload-box');
     </script>
 </body>
 </html>
