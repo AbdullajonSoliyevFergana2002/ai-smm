@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['user_id', 'image_path', 'generated_text', 'status'])]
+#[Fillable(['user_id', 'category', 'mood', 'image_path', 'generated_text', 'status'])]
 class Post extends Model
 {
     /**

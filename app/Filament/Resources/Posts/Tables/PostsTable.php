@@ -23,6 +23,22 @@ class PostsTable
                     ->placeholder('—')
                     ->searchable(),
 
+                TextColumn::make('category')
+                    ->label('Kategoriya')
+                    ->badge()
+                    ->formatStateUsing(fn (?string $state) => match ($state) {
+                        'commerce' => '🛍️ Savdo',
+                        'travel' => '✈️ Sayohat',
+                        'education' => '🎓 Ta\'lim',
+                        'food' => '🍽️ Food',
+                        default => $state,
+                    })
+                    ->placeholder('—'),
+
+                TextColumn::make('mood')
+                    ->label('Kayfiyat')
+                    ->placeholder('—'),
+
                 // 2. Yuklangan rasm (kichik ko'rinish).
                 ImageColumn::make('image_path')
                     ->label('Rasm')

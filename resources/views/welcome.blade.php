@@ -72,6 +72,26 @@
         .tone-btn.is-pressed,
         .tone-btn:active { filter: brightness(0.85); transform: scale(0.96); }
 
+        /* Kategoriya chip'lari (gorizontal) */
+        .cat-chip {
+            flex: 0 0 auto;               /* qisqarmasin, gorizontal scroll bo'lsin */
+            white-space: nowrap;
+            border-radius: 9999px;
+            padding: .45rem .9rem;
+            font-size: .875rem;
+            background-color: rgba(127, 127, 127, .15);
+            color: var(--tg-text);
+            border: 1px solid transparent;
+            transition: background-color .2s ease, color .2s ease, filter .1s ease, transform .1s ease;
+        }
+        .cat-chip.chip-active {
+            background-color: var(--tg-button);
+            color: var(--tg-button-text);
+            font-weight: 600;
+        }
+        .cat-chip.is-pressed,
+        .cat-chip:active { filter: brightness(0.85); transform: scale(0.96); }
+
         /* Rasm yuklash maydoni */
         .upload-box { transition: filter .1s ease, transform .1s ease; }
         .upload-box.is-pressed,
@@ -93,8 +113,14 @@
 
         <header class="text-center pt-2">
             <h1 class="text-2xl font-bold">🪄 AI-SMM</h1>
-            <p class="tg-hint text-sm mt-1">Mahsulot rasmidan marketing matni yarating</p>
+            <p class="tg-hint text-sm mt-1">Rasmdan AI bilan ijtimoiy tarmoq posti yarating</p>
         </header>
+
+        {{-- Kategoriyalar (gorizontal chips, JS bilan chiziladi) --}}
+        <section class="tg-card rounded-2xl p-4 space-y-3">
+            <label class="block text-sm font-medium">Kategoriya</label>
+            <div class="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1" id="category-group"></div>
+        </section>
 
         {{-- Rasm yuklash maydoni --}}
         <section class="tg-card rounded-2xl p-4 space-y-3">
@@ -110,23 +136,19 @@
             </label>
         </section>
 
-        {{-- Ohang tanlash --}}
+        {{-- Matn ohangi / Kayfiyat (kategoriyaga qarab JS bilan dinamik chiziladi) --}}
         <section class="tg-card rounded-2xl p-4 space-y-3">
-            <label class="block text-sm font-medium">Matn ohangi</label>
-            <div class="grid grid-cols-3 gap-2" id="tone-group">
-                @foreach (['sotuvchi' => 'Sotuvchi', 'quvnoq' => 'Quvnoq', 'rasmiy' => 'Rasmiy'] as $value => $label)
-                    <button type="button" class="tone-btn" data-tone="{{ $value }}">{{ $label }}</button>
-                @endforeach
-            </div>
+            <label class="block text-sm font-medium">Matn ohangi / Kayfiyat</label>
+            <div class="grid grid-cols-3 gap-2" id="mood-group"></div>
         </section>
 
         {{-- Qisqacha izoh (ixtiyoriy) --}}
         <section class="tg-card rounded-2xl p-4 space-y-2">
             <label for="additional-info" class="block text-sm font-medium">
-                Qisqacha izoh <span class="tg-hint font-normal">(ixtiyoriy)</span>
+                Rasm haqida qisqacha ma'lumot / Kontekst <span class="tg-hint font-normal">(ixtiyoriy)</span>
             </label>
             <textarea id="additional-info" rows="2"
-                placeholder="Masalan: 20% chegirma bor, faqat 3 kun yoki dostavka bepul..."
+                placeholder="Masalan: Tog'da sayohat qildik, havo ajoyib edi... yoki Kursimizga qabul boshlandi..."
                 class="w-full rounded-xl p-3 text-sm bg-[var(--tg-bg)] border border-gray-300/40 focus:outline-none focus:ring-2 focus:ring-[var(--tg-link)]"></textarea>
         </section>
 
@@ -200,25 +222,66 @@
 
         let currentPostId = null;
 
-        // --- Ohang tanlash (default: "Sotuvchi") ---
-        let selectedTone = 'sotuvchi';
-        const toneButtons = document.querySelectorAll('.tone-btn');
+        // --- Kategoriyalar va ularga mos kayfiyatlar ---
+        const categories = {
+            commerce:  { name: "🛍️ Savdo / Bozor",   moods: ["💰 Sotuvchi", "🚀 Aksiya", "📦 Mahsulot sharhi"] },
+            travel:    { name: "✈️ Sayohat / Blog",   moods: ["✨ Ilhomlantiruvchi", "🎭 Hissiyotli", "🌍 Ma'lumot beruvchi"] },
+            education: { name: "🎓 Kurslar / Ta'lim", moods: ["🧠 Ekspert", "💡 Motivatsiya", "📢 E'lon"] },
+            food:      { name: "🍽️ Kafe / Food",      moods: ["🤤 Ishtahaochar", "👨‍🍳 Retsept", "🎉 Taklifnoma"] },
+        };
 
-        function updateToneUI() {
-            toneButtons.forEach((btn) => {
-                btn.classList.toggle('tone-active', btn.dataset.tone === selectedTone);
+        const categoryGroup = document.getElementById('category-group');
+        const moodGroup = document.getElementById('mood-group');
+
+        let selectedCategory = Object.keys(categories)[0]; // default: birinchi kategoriya
+        let selectedMood = null;
+
+        // Kategoriya chip'larini chizadi
+        function renderCategories() {
+            categoryGroup.innerHTML = '';
+            Object.entries(categories).forEach(([key, cat]) => {
+                const chip = document.createElement('button');
+                chip.type = 'button';
+                chip.className = 'cat-chip' + (key === selectedCategory ? ' chip-active' : '');
+                chip.textContent = cat.name;
+                chip.dataset.key = key;
+                chip.addEventListener('click', () => {
+                    if (selectedCategory === key) return;
+                    selectedCategory = key;
+                    renderCategories();
+                    renderMoods(); // moodlar yangi kategoriyaga moslanadi (birinchisi tanlanadi)
+                    if (tg?.HapticFeedback) tg.HapticFeedback.selectionChanged();
+                });
+                bindPressOne(chip);
+                categoryGroup.appendChild(chip);
             });
         }
 
-        toneButtons.forEach((btn) => {
-            btn.addEventListener('click', () => {
-                selectedTone = btn.dataset.tone;
-                updateToneUI();
-                if (tg?.HapticFeedback) tg.HapticFeedback.selectionChanged();
+        // Tanlangan kategoriyaning kayfiyat tugmalarini chizadi
+        function renderMoods() {
+            moodGroup.innerHTML = '';
+            const moods = categories[selectedCategory].moods;
+            selectedMood = moods[0]; // default: birinchi kayfiyat
+            moods.forEach((mood) => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'tone-btn' + (mood === selectedMood ? ' tone-active' : '');
+                btn.textContent = mood;
+                btn.dataset.mood = mood;
+                btn.addEventListener('click', () => {
+                    selectedMood = mood;
+                    moodGroup.querySelectorAll('.tone-btn').forEach((b) => {
+                        b.classList.toggle('tone-active', b.dataset.mood === selectedMood);
+                    });
+                    if (tg?.HapticFeedback) tg.HapticFeedback.selectionChanged();
+                });
+                bindPressOne(btn);
+                moodGroup.appendChild(btn);
             });
-        });
+        }
 
-        updateToneUI(); // boshlang'ich holatda "Sotuvchi" yonib turadi
+        renderCategories();
+        renderMoods();
 
         // --- Rasm preview ---
         imageInput.addEventListener('change', () => {
@@ -341,8 +404,6 @@
                 showMessage('Avval rasm tanlang.', true);
                 return;
             }
-            const tone = selectedTone;
-
             setLoading(generateBtn, true);
             messageBox.classList.add('hidden');
 
@@ -359,7 +420,8 @@
                 const formData = new FormData();
                 formData.append('image', fullImage);   // to'liq sifatli — kanalga shu ketadi
                 formData.append('ai_image', aiImage);  // kichik nusxa — Gemini tahlili uchun
-                formData.append('tone', tone);
+                formData.append('category', selectedCategory); // kategoriya kaliti (masalan: commerce)
+                formData.append('mood', selectedMood);         // tanlangan kayfiyat (masalan: 💰 Sotuvchi)
 
                 // Ixtiyoriy qisqacha izoh (bo'sh bo'lmasa yuboramiz).
                 const info = additionalInfo.value.trim();
@@ -441,23 +503,24 @@
         });
 
         // --- Bosilish effekti (iOS/Telegram WebView'da :active ishonchsiz, shuning uchun JS bilan) ---
-        function bindPressEffect(selector) {
-            document.querySelectorAll(selector).forEach((el) => {
-                const press = () => el.classList.add('is-pressed');
-                const release = () => el.classList.remove('is-pressed');
-                el.addEventListener('pointerdown', press);
-                el.addEventListener('pointerup', release);
-                el.addEventListener('pointerleave', release);
-                el.addEventListener('pointercancel', release);
-                // Yengil tebranish (qo'llab-quvvatlasa) — bosilgani "his qilinsin"
-                el.addEventListener('pointerdown', () => {
-                    if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
-                });
+        function bindPressOne(el) {
+            const press = () => el.classList.add('is-pressed');
+            const release = () => el.classList.remove('is-pressed');
+            el.addEventListener('pointerdown', press);
+            el.addEventListener('pointerup', release);
+            el.addEventListener('pointerleave', release);
+            el.addEventListener('pointercancel', release);
+            // Yengil tebranish (qo'llab-quvvatlasa) — bosilgani "his qilinsin"
+            el.addEventListener('pointerdown', () => {
+                if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
             });
         }
+        function bindPressEffect(selector) {
+            document.querySelectorAll(selector).forEach(bindPressOne);
+        }
         bindPressEffect('.tg-btn');
-        bindPressEffect('.tone-btn');
         bindPressEffect('.upload-box');
+        // .cat-chip va .tone-btn dinamik yaratilgani uchun ular render paytida ulanadi.
     </script>
 </body>
 </html>

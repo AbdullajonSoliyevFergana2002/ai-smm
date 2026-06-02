@@ -25,6 +25,21 @@ class PostInfolist
                         : $record->user?->first_name)
                     ->placeholder('—'),
 
+                TextEntry::make('category')
+                    ->label('Kategoriya')
+                    ->formatStateUsing(fn (?string $state) => match ($state) {
+                        'commerce' => '🛍️ Savdo / Bozor',
+                        'travel' => '✈️ Sayohat / Blog',
+                        'education' => '🎓 Kurslar / Ta\'lim',
+                        'food' => '🍽️ Kafe / Food',
+                        default => $state,
+                    })
+                    ->placeholder('—'),
+
+                TextEntry::make('mood')
+                    ->label('Kayfiyat')
+                    ->placeholder('—'),
+
                 TextEntry::make('status')
                     ->label('Holat')
                     ->badge()

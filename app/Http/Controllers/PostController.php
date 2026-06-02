@@ -19,7 +19,8 @@ class PostController extends Controller
         $validated = $request->validate([
             'image' => ['required', 'image', 'mimes:jpeg,jpg,png,webp', 'max:51200'],     // to'liq sifatli (kanal), maks. 50 MB
             'ai_image' => ['nullable', 'image', 'mimes:jpeg,jpg,png,webp', 'max:8192'],   // Gemini uchun kichik nusxa
-            'tone' => ['required', 'string', 'max:50'],
+            'category' => ['required', 'string', 'max:50'],
+            'mood' => ['required', 'string', 'max:80'],
             'additional_info' => ['nullable', 'string', 'max:500'],
         ]);
 
@@ -35,21 +36,35 @@ class PostController extends Controller
         $path = $imageFile->store('posts', 'public');
 
         $post = $request->user()->posts()->create([
+            'category' => $validated['category'],
+            'mood' => $validated['mood'],
             'image_path' => $path,
             'status' => 'pending',
         ]);
 
-        // 3. tone asosida prompt tuzamiz.
-        $tone = $validated['tone'];
-        $prompt = "Ushbu rasmdagi mahsulotni tahlil qil. O'zbekiston bozori uchun {$tone} ohangda, "
-            ."chiroyli va qisqa o'zbekcha marketing matni hamda hashtaglar yozib ber.";
+        // 3. Universal prompt tuzamiz (kategoriya + kayfiyat + kontekst asosida).
+        //    category — kalit (masalan: commerce), uni o'qiladigan nomга aylantiramiz.
+        $categoryNames = [
+            'commerce' => 'Savdo / Bozor',
+            'travel' => 'Sayohat / Blog',
+            'education' => 'Kurslar / Ta\'lim',
+            'food' => 'Kafe / Food',
+        ];
+        $category = $categoryNames[$validated['category']] ?? $validated['category'];
+        $mood = $validated['mood'];
 
-        // Foydalanuvchi qo'shimcha izoh yozgan bo'lsa, promptga singdiramiz.
+        // Foydalanuvchi kontekst yozgan bo'lsa — alohida ko'rsatma, aks holda bo'sh.
         $additionalInfo = trim($validated['additional_info'] ?? '');
-        if ($additionalInfo !== '') {
-            $prompt .= " Shuningdek, matnni tayyorlashda mana bu qo'shimcha ma'lumotlarni ham "
-                ."hisobga ol va matnga singdir: {$additionalInfo}";
-        }
+        $additionalInfoPrompt = $additionalInfo !== ''
+            ? "Matnni yozishda mana bu foydalanuvchi taqdim etgan real kontekst va ma'lumotlarni "
+                ."albatta inobatga oling va matnga singdiring: [FOYDALANUVCHI MATNI: {$additionalInfo}]"
+            : '';
+
+        $prompt = "Siz ijtimoiy tarmoqlar (Instagram, Telegram) uchun professional kontent meykersiz. "
+            ."Berilgan rasmni diqqat bilan tahlil qiling. Ushbu rasm uchun '{$category}' yo'nalishida va "
+            ."'{$mood}' kayfiyatida (ohangida) chiroyli, jozibador, imlo xatolarisiz o'zbek tilida "
+            ."sotsial tarmoq posti yozib bering. Matnda mavzuga mos emojilar va trenddagi hashtaglar bo'lsin. "
+            .$additionalInfoPrompt;
 
         // 4. Gemini API'ga so'rov yuboramiz.
         $endpoint = config('services.gemini.endpoint');
