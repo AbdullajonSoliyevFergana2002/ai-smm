@@ -217,7 +217,7 @@
         // Rasmni yuborishdan oldin brauzerda kichraytirib, JPEG ga o'giradi.
         // Telefon rasmlari ko'pincha 5-12 MB bo'ladi va server limitidan oshib yuboradi.
         // Bu HEIC (iPhone) ni ham JPEG ga aylantiradi.
-        async function compressImage(file, maxSize = 1600, quality = 0.85) {
+        async function compressImage(file, maxSize = 1280, quality = 0.8) {
             try {
                 const dataUrl = await new Promise((resolve, reject) => {
                     const reader = new FileReader();
