@@ -12,6 +12,9 @@
     {{-- 2. Telegram WebApp SDK --}}
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
 
+    {{-- HEIC (iPhone/Android) rasmlarini JPEG ga aylantirish uchun --}}
+    <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
+
     <style>
         /* 3. Telegram mavzusiga (ThemeParams) moslashish uchun CSS o'zgaruvchilari */
         :root {
@@ -50,9 +53,24 @@
         }
 
         /* Ohang tugmalari */
-        .tone-option span { transition: filter .1s ease, transform .1s ease; }
-        .tone-option.is-pressed span,
-        .tone-option:active span { filter: brightness(0.85); transform: scale(0.96); }
+        .tone-btn {
+            text-align: center;
+            border-radius: .75rem;
+            padding: .5rem 0;
+            font-size: .875rem;
+            background-color: rgba(127, 127, 127, .15); /* tanlanmagan: to'q fon */
+            color: var(--tg-text);
+            border: 1px solid transparent;
+            transition: background-color .2s ease, color .2s ease, filter .1s ease, transform .1s ease;
+        }
+        /* Tanlangan ohang: yorqin ko'k (theme button rangi) + oq matn */
+        .tone-btn.tone-active {
+            background-color: var(--tg-button);
+            color: var(--tg-button-text);
+            font-weight: 600;
+        }
+        .tone-btn.is-pressed,
+        .tone-btn:active { filter: brightness(0.85); transform: scale(0.96); }
 
         /* Rasm yuklash maydoni */
         .upload-box { transition: filter .1s ease, transform .1s ease; }
@@ -97,14 +115,19 @@
             <label class="block text-sm font-medium">Matn ohangi</label>
             <div class="grid grid-cols-3 gap-2" id="tone-group">
                 @foreach (['sotuvchi' => 'Sotuvchi', 'quvnoq' => 'Quvnoq', 'rasmiy' => 'Rasmiy'] as $value => $label)
-                    <label class="tone-option cursor-pointer">
-                        <input type="radio" name="tone" value="{{ $value }}" class="peer hidden" @checked($loop->first)>
-                        <span class="block text-center text-sm rounded-xl py-2 border border-transparent bg-black/5 peer-checked:tg-btn peer-checked:font-semibold transition">
-                            {{ $label }}
-                        </span>
-                    </label>
+                    <button type="button" class="tone-btn" data-tone="{{ $value }}">{{ $label }}</button>
                 @endforeach
             </div>
+        </section>
+
+        {{-- Qisqacha izoh (ixtiyoriy) --}}
+        <section class="tg-card rounded-2xl p-4 space-y-2">
+            <label for="additional-info" class="block text-sm font-medium">
+                Qisqacha izoh <span class="tg-hint font-normal">(ixtiyoriy)</span>
+            </label>
+            <textarea id="additional-info" rows="2"
+                placeholder="Masalan: 20% chegirma bor, faqat 3 kun yoki dostavka bepul..."
+                class="w-full rounded-xl p-3 text-sm bg-[var(--tg-bg)] border border-gray-300/40 focus:outline-none focus:ring-2 focus:ring-[var(--tg-link)]"></textarea>
         </section>
 
         {{-- Matn yaratish tugmasi --}}
@@ -172,17 +195,56 @@
         const resultSection = document.getElementById('result-section');
         const generatedText = document.getElementById('generated-text');
         const channelIdInput = document.getElementById('channel-id');
+        const additionalInfo = document.getElementById('additional-info');
         const messageBox = document.getElementById('message');
 
         let currentPostId = null;
+
+        // --- Ohang tanlash (default: "Sotuvchi") ---
+        let selectedTone = 'sotuvchi';
+        const toneButtons = document.querySelectorAll('.tone-btn');
+
+        function updateToneUI() {
+            toneButtons.forEach((btn) => {
+                btn.classList.toggle('tone-active', btn.dataset.tone === selectedTone);
+            });
+        }
+
+        toneButtons.forEach((btn) => {
+            btn.addEventListener('click', () => {
+                selectedTone = btn.dataset.tone;
+                updateToneUI();
+                if (tg?.HapticFeedback) tg.HapticFeedback.selectionChanged();
+            });
+        });
+
+        updateToneUI(); // boshlang'ich holatda "Sotuvchi" yonib turadi
 
         // --- Rasm preview ---
         imageInput.addEventListener('change', () => {
             const file = imageInput.files[0];
             if (!file) return;
+
+            // HEIC brauzerда ko'rsatilmaydi — tasdiq belgisini ko'rsatamiz.
+            const isHeic = /heic|heif/i.test(file.type || '') || /\.hei[cf]$/i.test(file.name || '');
+            if (isHeic) {
+                placeholder.innerHTML = '<div class="text-3xl">✅</div>'
+                    + '<div class="text-sm mt-1">Rasm tanlandi</div>';
+                preview.classList.add('hidden');
+                placeholder.classList.remove('hidden');
+                return;
+            }
+
             preview.src = URL.createObjectURL(file);
             preview.classList.remove('hidden');
             placeholder.classList.add('hidden');
+            // Agar preview yuklanmasa (noma'lum format), tasdiq belgisiga qaytamiz.
+            preview.onerror = () => {
+                preview.classList.add('hidden');
+                placeholder.innerHTML = '<div class="text-3xl">✅</div>'
+                    + '<div class="text-sm mt-1">Rasm tanlandi</div>';
+                placeholder.classList.remove('hidden');
+            };
         });
 
         // --- Yordamchi funksiyalar ---
@@ -214,16 +276,30 @@
             catch (e) { return {}; }
         }
 
+        // HEIC/HEIF ni JPEG ga aylantiradi (brauzer canvas HEIC ni o'qiy olmaydi).
+        async function ensureDecodable(file) {
+            const isHeic = /heic|heif/i.test(file.type || '') || /\.hei[cf]$/i.test(file.name || '');
+            if (!isHeic) return file;
+            if (!window.heic2any) {
+                throw new Error('HEIC kutubxonasi yuklanmadi (internet?). Telefon kamerasini "Most Compatible/JPEG" ga o\'zgartiring.');
+            }
+            const out = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.9 });
+            const blob = Array.isArray(out) ? out[0] : out;
+            return new File([blob], 'photo.jpg', { type: 'image/jpeg' });
+        }
+
         // Rasmni yuborishdan oldin brauzerda kichraytirib, JPEG ga o'giradi.
         // Telefon rasmlari ko'pincha 5-12 MB bo'ladi va server limitidan oshib yuboradi.
-        // Bu HEIC (iPhone) ni ham JPEG ga aylantiradi.
+        // HEIC (iPhone/Android) ham JPEG ga aylantiriladi.
         async function compressImage(file, maxSize = 1280, quality = 0.8) {
+            // HEIC bo'lsa avval JPEG ga aylantiramiz (bu xato bersa, yuqoriga uzatiladi).
+            const decodable = await ensureDecodable(file);
             try {
                 const dataUrl = await new Promise((resolve, reject) => {
                     const reader = new FileReader();
                     reader.onload = () => resolve(reader.result);
                     reader.onerror = reject;
-                    reader.readAsDataURL(file);
+                    reader.readAsDataURL(decodable);
                 });
                 const img = await new Promise((resolve, reject) => {
                     const i = new Image();
@@ -265,7 +341,7 @@
                 showMessage('Avval rasm tanlang.', true);
                 return;
             }
-            const tone = document.querySelector('input[name="tone"]:checked').value;
+            const tone = selectedTone;
 
             setLoading(generateBtn, true);
             messageBox.classList.add('hidden');
@@ -280,6 +356,12 @@
                 const formData = new FormData();
                 formData.append('image', file);
                 formData.append('tone', tone);
+
+                // Ixtiyoriy qisqacha izoh (bo'sh bo'lmasa yuboramiz).
+                const info = additionalInfo.value.trim();
+                if (info) {
+                    formData.append('additional_info', info);
+                }
 
                 let res;
                 try {
@@ -372,7 +454,7 @@
             });
         }
         bindPressEffect('.tg-btn');
-        bindPressEffect('.tone-option');
+        bindPressEffect('.tone-btn');
         bindPressEffect('.upload-box');
     </script>
 </body>

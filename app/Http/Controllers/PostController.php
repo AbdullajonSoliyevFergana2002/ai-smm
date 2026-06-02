@@ -19,6 +19,7 @@ class PostController extends Controller
         $validated = $request->validate([
             'image' => ['required', 'image', 'mimes:jpeg,jpg,png,webp', 'max:8192'], // maks. 8 MB
             'tone' => ['required', 'string', 'max:50'],
+            'additional_info' => ['nullable', 'string', 'max:500'],
         ]);
 
         // 1. Rasmni storage/app/public/posts ga saqlaymiz va yangi yozuv yaratamiz.
@@ -38,6 +39,13 @@ class PostController extends Controller
         $tone = $validated['tone'];
         $prompt = "Ushbu rasmdagi mahsulotni tahlil qil. O'zbekiston bozori uchun {$tone} ohangda, "
             ."chiroyli va qisqa o'zbekcha marketing matni hamda hashtaglar yozib ber.";
+
+        // Foydalanuvchi qo'shimcha izoh yozgan bo'lsa, promptga singdiramiz.
+        $additionalInfo = trim($validated['additional_info'] ?? '');
+        if ($additionalInfo !== '') {
+            $prompt .= " Shuningdek, matnni tayyorlashda mana bu qo'shimcha ma'lumotlarni ham "
+                ."hisobga ol va matnga singdir: {$additionalInfo}";
+        }
 
         // 4. Gemini API'ga so'rov yuboramiz.
         $endpoint = config('services.gemini.endpoint');
