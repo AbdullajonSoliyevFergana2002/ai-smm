@@ -29,11 +29,27 @@
         }
         .tg-card { background-color: var(--tg-secondary-bg); }
         .tg-hint { color: var(--tg-hint); }
+
+        /* Mobil qurilmalarda standart kulrang tap-effektni o'chiramiz (o'rniga o'zimizniki) */
+        button, label, .tone-option { -webkit-tap-highlight-color: transparent; }
+
         .tg-btn {
             background-color: var(--tg-button);
             color: var(--tg-button-text);
+            transition: filter .12s ease, transform .12s ease;
         }
         .tg-btn:disabled { opacity: .55; cursor: not-allowed; }
+        /* Bosilganda: to'qroq rang + biroz kichrayish (har qanday theme rangida ishlaydi) */
+        .tg-btn:not(:disabled):active {
+            filter: brightness(0.82);
+            transform: scale(0.97);
+        }
+
+        /* Ohang tugmalari va rasm maydoni bosilganda ham sezilsin */
+        .tone-option span { transition: filter .12s ease, transform .12s ease; }
+        .tone-option:active span { filter: brightness(0.9); transform: scale(0.97); }
+        .upload-box { transition: filter .12s ease, transform .12s ease; }
+        .upload-box:active { filter: brightness(0.95); transform: scale(0.99); }
 
         /* Loading spinner */
         .spinner {
@@ -58,7 +74,7 @@
         <section class="tg-card rounded-2xl p-4 space-y-3">
             <label class="block text-sm font-medium">Mahsulot rasmi</label>
 
-            <label for="image" class="block cursor-pointer rounded-xl border-2 border-dashed border-gray-300/60 hover:border-[var(--tg-link)] transition p-6 text-center">
+            <label for="image" class="upload-box block cursor-pointer rounded-xl border-2 border-dashed border-gray-300/60 hover:border-[var(--tg-link)] transition p-6 text-center">
                 <div id="upload-placeholder" class="space-y-1">
                     <div class="text-3xl">📷</div>
                     <div class="tg-hint text-sm">Rasm tanlash uchun bosing</div>
@@ -184,31 +200,87 @@
             };
         }
 
+        // Javobni xavfsiz JSON qilib o'qish (413/HTML xatolarda ham yiqilmasligi uchun).
+        async function parseJsonSafe(res) {
+            try { return await res.json(); }
+            catch (e) { return {}; }
+        }
+
+        // Rasmni yuborishdan oldin brauzerda kichraytirib, JPEG ga o'giradi.
+        // Telefon rasmlari ko'pincha 5-12 MB bo'ladi va server limitidan oshib yuboradi.
+        // Bu HEIC (iPhone) ni ham JPEG ga aylantiradi.
+        async function compressImage(file, maxSize = 1600, quality = 0.85) {
+            try {
+                const dataUrl = await new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(reader.result);
+                    reader.onerror = reject;
+                    reader.readAsDataURL(file);
+                });
+                const img = await new Promise((resolve, reject) => {
+                    const i = new Image();
+                    i.onload = () => resolve(i);
+                    i.onerror = reject;
+                    i.src = dataUrl;
+                });
+
+                let width = img.naturalWidth;
+                let height = img.naturalHeight;
+                if (width > maxSize || height > maxSize) {
+                    if (width > height) {
+                        height = Math.round(height * maxSize / width);
+                        width = maxSize;
+                    } else {
+                        width = Math.round(width * maxSize / height);
+                        height = maxSize;
+                    }
+                }
+
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+
+                const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', quality));
+                if (!blob) return file;
+                return new File([blob], 'photo.jpg', { type: 'image/jpeg' });
+            } catch (e) {
+                // Dekod bo'lmasa (masalan eski brauzer), asl faylni qaytaramiz.
+                return file;
+            }
+        }
+
         // --- 1. Matn yaratish ---
         generateBtn.addEventListener('click', async () => {
-            const file = imageInput.files[0];
-            if (!file) {
+            const original = imageInput.files[0];
+            if (!original) {
                 showMessage('Avval rasm tanlang.', true);
                 return;
             }
             const tone = document.querySelector('input[name="tone"]:checked').value;
 
-            const formData = new FormData();
-            formData.append('image', file);
-            formData.append('tone', tone);
-
             setLoading(generateBtn, true);
             messageBox.classList.add('hidden');
             try {
+                const file = await compressImage(original);
+
+                const formData = new FormData();
+                formData.append('image', file);
+                formData.append('tone', tone);
+
                 const res = await fetch('/api/posts/generate', {
                     method: 'POST',
                     headers: tgHeaders(),     // FormData uchun Content-Type ni brauzer o'zi qo'yadi
                     body: formData,
                 });
-                const data = await res.json();
+                const data = await parseJsonSafe(res);
 
                 if (!res.ok) {
-                    showMessage(data.message || 'Xatolik yuz berdi.', true);
+                    if (res.status === 413) {
+                        showMessage('Rasm hajmi juda katta. Kichikroq rasm tanlang.', true);
+                    } else {
+                        showMessage(data.message || ('Xatolik (kod: ' + res.status + ')'), true);
+                    }
                     return;
                 }
 
@@ -245,10 +317,10 @@
                         generated_text: generatedText.value,
                     }),
                 });
-                const data = await res.json();
+                const data = await parseJsonSafe(res);
 
                 if (!res.ok) {
-                    showMessage(data.message || 'Yuborishda xatolik.', true);
+                    showMessage(data.message || ('Yuborishda xatolik (kod: ' + res.status + ')'), true);
                     return;
                 }
 
