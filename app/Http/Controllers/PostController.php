@@ -21,6 +21,7 @@ class PostController extends Controller
             'ai_image' => ['nullable', 'image', 'mimes:jpeg,jpg,png,webp', 'max:8192'],   // Gemini uchun kichik nusxa
             'category' => ['required', 'string', 'max:50'],
             'mood' => ['required', 'string', 'max:80'],
+            'lang' => ['nullable', 'string', 'in:uz,ru,en'],
             'additional_info' => ['nullable', 'string', 'max:500'],
         ]);
 
@@ -53,6 +54,15 @@ class PostController extends Controller
         $category = $categoryNames[$validated['category']] ?? $validated['category'];
         $mood = $validated['mood'];
 
+        // Tanlangan tilga qarab Gemini'ga beriladigan til buyrug'i (default: o'zbekcha).
+        $lang = $validated['lang'] ?? 'uz';
+        $languageInstructions = [
+            'uz' => "o'zbek tilida imlo xatolarisiz",
+            'ru' => 'на русском языке без орфографических ошибок',
+            'en' => 'in English without any grammatical errors',
+        ];
+        $languageInstruction = $languageInstructions[$lang] ?? $languageInstructions['uz'];
+
         // Foydalanuvchi kontekst yozgan bo'lsa — alohida ko'rsatma, aks holda bo'sh.
         $additionalInfo = trim($validated['additional_info'] ?? '');
         $additionalInfoPrompt = $additionalInfo !== ''
@@ -62,7 +72,7 @@ class PostController extends Controller
 
         $prompt = "Siz ijtimoiy tarmoqlar (Instagram, Telegram) uchun professional kontent meykersiz. "
             ."Berilgan rasmni diqqat bilan tahlil qiling. Ushbu rasm uchun '{$category}' yo'nalishida va "
-            ."'{$mood}' kayfiyatida (ohangida) chiroyli, jozibador, imlo xatolarisiz o'zbek tilida "
+            ."'{$mood}' kayfiyatida (ohangida) chiroyli, jozibador {$languageInstruction} "
             ."sotsial tarmoq posti yozib bering. Matnda mavzuga mos emojilar va trenddagi hashtaglar bo'lsin. "
             .$additionalInfoPrompt;
 

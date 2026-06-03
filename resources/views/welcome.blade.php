@@ -88,6 +88,12 @@
             <div class="grid grid-cols-2 gap-2.5 w-full" id="category-group"></div>
         </section>
 
+        {{-- Matn tili (3 ta teng tugma, JS bilan chiziladi) --}}
+        <section class="tg-card rounded-2xl p-4 space-y-3">
+            <label class="block text-sm font-medium">Matn tili</label>
+            <div class="grid grid-cols-3 gap-2.5 w-full" id="lang-group"></div>
+        </section>
+
         {{-- Rasm yuklash maydoni --}}
         <section class="tg-card rounded-2xl p-4 space-y-3">
             <label class="block text-sm font-medium">Mahsulot rasmi</label>
@@ -140,10 +146,8 @@
             <div class="space-y-2 pt-1">
                 <label class="block text-sm font-medium">Post yuboriladigan kanal</label>
 
-                <select id="channel-select"
-                    class="bg-[#232e3c] text-white p-3 rounded-xl border border-transparent w-full text-xs font-bold focus:outline-none focus:ring-2 focus:ring-[var(--tg-link)]">
-                    <option value="">-- Kanalni tanlang --</option>
-                </select>
+                {{-- Kanallar custom radio-tugma sifatida shu konteynerga JS bilan chiziladi --}}
+                <div id="channels-list" class="grid grid-cols-1 gap-2 w-full"></div>
 
                 {{-- Kanal yo'q bo'lsa ko'rsatiladigan ogohlantirish --}}
                 <p id="no-channels" class="hidden text-xs leading-relaxed rounded-xl p-3 bg-amber-500/10 text-amber-400">
@@ -199,9 +203,12 @@
         const publishBtn = document.getElementById('publish-btn');
         const resultSection = document.getElementById('result-section');
         const generatedText = document.getElementById('generated-text');
-        const channelSelect = document.getElementById('channel-select');
+        const channelsList = document.getElementById('channels-list');
         const noChannelsMsg = document.getElementById('no-channels');
         const additionalInfo = document.getElementById('additional-info');
+
+        // Tanlangan kanalning ICHKI ID'si (backend egalikni shu orqali tekshiradi).
+        let selectedChannelId = null;
         const messageBox = document.getElementById('message');
 
         let currentPostId = null;
@@ -297,10 +304,104 @@
             });
         }
 
+        // --- Matn tili (3 ta tugma) ---
+        const LANGUAGES = [
+            { code: 'uz', name: "🇺🇿 O'zbekcha" },
+            { code: 'ru', name: '🇷🇺 Русский' },
+            { code: 'en', name: '🇬🇧 English' },
+        ];
+        const langGroup = document.getElementById('lang-group');
+        let selectedLang = 'uz'; // default: o'zbekcha
+
+        // Layout — MOOD bilan bir xil uslub, lekin 3 ustun uchun ixchamroq
+        // (til nomlari uzunroq bo'lgani uchun uppercase yo'q, gap kichik).
+        const LANG_LAYOUT = 'lang-btn flex items-center justify-center gap-1.5 px-2 py-3 rounded-xl text-xs font-bold w-full min-h-[48px] text-center border border-transparent transition-all duration-200 whitespace-normal';
+
+        function renderLanguages() {
+            langGroup.innerHTML = '';
+            LANGUAGES.forEach((lang) => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = LANG_LAYOUT;
+                setBtnState(btn, lang.code === selectedLang);
+                btn.innerHTML = emojiLabelHtml(lang.name);
+                btn.dataset.lang = lang.code;
+                btn.addEventListener('click', () => {
+                    if (selectedLang === lang.code) return;
+                    selectedLang = lang.code;
+                    langGroup.querySelectorAll('.lang-btn').forEach((b) => {
+                        setBtnState(b, b.dataset.lang === selectedLang);
+                    });
+                    if (tg?.HapticFeedback) tg.HapticFeedback.selectionChanged();
+                });
+                bindPressOne(btn);
+                langGroup.appendChild(btn);
+            });
+        }
+
         renderCategories();
         renderMoods();
+        renderLanguages();
 
-        // --- Foydalanuvchi kanallarini yuklash (Select'ni to'ldirish) ---
+        // --- Kanal tanlash (custom radio-list) ---
+
+        // Tanlangan holatda elementga qo'shiladigan klasslar (faol dizayn).
+        const CHANNEL_ACTIVE   = ['bg-blue-600/10', 'border-blue-500'];
+        const CHANNEL_INACTIVE = ['bg-[#232e3c]', 'border-transparent'];
+
+        // Bitta kanal elementini faol/nofaol ko'rinishga keltiradi.
+        function setChannelActive(item, isActive) {
+            item.classList.remove(...CHANNEL_ACTIVE, ...CHANNEL_INACTIVE);
+            item.classList.add(...(isActive ? CHANNEL_ACTIVE : CHANNEL_INACTIVE));
+
+            const indicator = item.querySelector('.radio-indicator');
+            const dot = item.querySelector('.dot');
+            // Doira: faol bo'lsa ko'k chegara, nofaol bo'lsa kulrang.
+            indicator.classList.toggle('border-blue-500', isActive);
+            indicator.classList.toggle('border-slate-400', !isActive);
+            // Ichki nuqta: faol bo'lsa oq, aks holda shaffof.
+            dot.classList.toggle('bg-white', isActive);
+            dot.classList.toggle('bg-transparent', !isActive);
+        }
+
+        // Bir kanalni tanlaydi: qolganlaridan faollikni olib tashlaydi.
+        function selectChannel(channelId) {
+            selectedChannelId = channelId;
+            channelsList.querySelectorAll('.channel-item').forEach((item) => {
+                setChannelActive(item, String(item.dataset.channelId) === String(channelId));
+            });
+        }
+
+        // Bitta kanal kartasini (custom radio) yaratadi.
+        function createChannelItem(channel) {
+            const item = document.createElement('div');
+            item.className = 'channel-item flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all duration-200';
+            item.dataset.channelId = channel.id;
+            item.innerHTML =
+                '<div class="flex items-center gap-2 min-w-0">'
+                +   '<span class="text-sm font-bold text-slate-200 truncate">📢 ' + escapeHtml(channel.channel_name) + '</span>'
+                + '</div>'
+                + '<div class="radio-indicator w-4 h-4 rounded-full border-2 border-slate-400 flex items-center justify-center shrink-0">'
+                +   '<div class="dot w-2 h-2 rounded-full bg-transparent transition-colors"></div>'
+                + '</div>';
+
+            setChannelActive(item, false);
+            item.addEventListener('click', () => {
+                selectChannel(channel.id);
+                if (tg?.HapticFeedback) tg.HapticFeedback.selectionChanged();
+            });
+            bindPressOne(item);
+            return item;
+        }
+
+        // HTML'ga qo'yishdan oldin kanal nomini xavfsizlaymiz (XSS oldini olish).
+        function escapeHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = str ?? '';
+            return div.innerHTML;
+        }
+
+        // --- Foydalanuvchi kanallarini yuklash va radio-list chizish ---
         async function loadChannels() {
             try {
                 const res = await fetch('/api/channels', { headers: tgHeaders() });
@@ -309,25 +410,25 @@
 
                 const channels = data.channels || [];
 
-                // Kanal yo'q bo'lsa — Select'ni yashirib, ogohlantirishni ko'rsatamiz.
+                // Kanal yo'q bo'lsa — ro'yxatni bo'shatib, ogohlantirishni ko'rsatamiz.
                 if (channels.length === 0) {
-                    channelSelect.classList.add('hidden');
+                    channelsList.innerHTML = '';
+                    channelsList.classList.add('hidden');
                     noChannelsMsg.classList.remove('hidden');
                     return;
                 }
 
-                // Kanallarni <option> sifatida joylaymiz. value = ichki ID
-                // (backend egalikni tekshirib, telegram_channel_id ni o'zi aniqlaydi).
-                channels.forEach((ch) => {
-                    const opt = document.createElement('option');
-                    opt.value = ch.id;
-                    opt.textContent = ch.channel_name;
-                    channelSelect.appendChild(opt);
-                });
-                channelSelect.classList.remove('hidden');
+                channelsList.innerHTML = '';
+                channels.forEach((ch) => channelsList.appendChild(createChannelItem(ch)));
+                channelsList.classList.remove('hidden');
                 noChannelsMsg.classList.add('hidden');
+
+                // Bitta kanal bo'lsa — uni avtomat tanlaymiz (ortiqcha klik shart emas).
+                if (channels.length === 1) {
+                    selectChannel(channels[0].id);
+                }
             } catch (e) {
-                // Tarmoq xatosi — Select bo'sh (faqat placeholder) qoladi.
+                // Tarmoq xatosi — ro'yxat bo'sh qoladi, foydalanuvchi qayta urinishi mumkin.
             }
         }
 
@@ -472,6 +573,7 @@
                 formData.append('ai_image', aiImage);  // kichik nusxa — Gemini tahlili uchun
                 formData.append('category', selectedCategory); // kategoriya kaliti (masalan: commerce)
                 formData.append('mood', selectedMood);         // tanlangan kayfiyat (masalan: 💰 Sotuvchi)
+                formData.append('lang', selectedLang);         // matn tili (uz / ru / en)
 
                 // Ixtiyoriy qisqacha izoh (bo'sh bo'lmasa yuboramiz).
                 const info = additionalInfo.value.trim();
@@ -517,7 +619,7 @@
 
         // --- 2. Kanalga joylash ---
         publishBtn.addEventListener('click', async () => {
-            const channelId = channelSelect.value;
+            const channelId = selectedChannelId;
             if (!channelId) {
                 showMessage('Post yuboriladigan kanalni tanlang.', true);
                 return;
