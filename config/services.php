@@ -40,6 +40,10 @@ return [
         // initData necha soniyagacha amal qiladi (eskirgan so'rovlarni rad etish uchun).
         // 0 — muddat tekshiruvini o'chiradi.
         'auth_ttl' => (int) env('TELEGRAM_AUTH_TTL', 86400),
+        // setWebhook'da `secret_token` sifatida beriladigan maxfiy qiymat.
+        // Telegram har bir webhook so'rovida uni `X-Telegram-Bot-Api-Secret-Token`
+        // header'ida qaytaradi — shu orqali so'rov haqiqatan Telegram'dan kelganini tekshiramiz.
+        'webhook_secret' => env('TELEGRAM_WEBHOOK_SECRET'),
     ],
 
     'gemini' => [

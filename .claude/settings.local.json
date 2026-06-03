@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(php artisan *)"
+      "Bash(php artisan *)",
+      "Bash(php -l app/Http/Controllers/ChannelController.php)",
+      "Bash(php -l app/Http/Controllers/PostController.php)"
     ]
   }
 }

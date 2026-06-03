@@ -141,11 +141,15 @@ class PostController extends Controller
     {
         $validated = $request->validate([
             'post_id' => ['required', 'integer'],
-            'telegram_channel_id' => ['required', 'string'],
+            'channel_id' => ['required', 'integer'],
         ]);
 
         // Faqat o'ziga tegishli postni topamiz (boshqaning postini chop eta olmasin).
         $post = $request->user()->posts()->findOrFail($validated['post_id']);
+
+        // Kanal ham AYNAN shu foydalanuvchiniki bo'lishi shart — aks holda 404.
+        // Bu foydalanuvchi o'zga kanalga post yuborishining oldini oladi.
+        $channel = $request->user()->channels()->findOrFail($validated['channel_id']);
 
         if (empty($post->generated_text)) {
             return response()->json([
@@ -172,7 +176,7 @@ class PostController extends Controller
                 basename($post->image_path),
             )
             ->post("https://api.telegram.org/bot{$token}/sendPhoto", [
-                'chat_id' => $validated['telegram_channel_id'],
+                'chat_id' => $channel->telegram_channel_id,
                 'caption' => $caption,
             ]);
 

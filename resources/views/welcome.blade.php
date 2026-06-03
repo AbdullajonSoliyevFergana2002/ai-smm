@@ -136,9 +136,20 @@
                 <span id="copy-label">📋 Matnni nusxalash</span>
             </button>
 
-            <label class="block text-sm font-medium pt-1">Kanal ID</label>
-            <input id="channel-id" type="text" placeholder="@kanal_username yoki -100..."
-                class="w-full rounded-xl p-3 text-sm bg-[var(--tg-bg)] border border-gray-300/40 focus:outline-none focus:ring-2 focus:ring-[var(--tg-link)]">
+            {{-- Post yuboriladigan kanal (API'dan dinamik to'ladi) --}}
+            <div class="space-y-2 pt-1">
+                <label class="block text-sm font-medium">Post yuboriladigan kanal</label>
+
+                <select id="channel-select"
+                    class="bg-[#232e3c] text-white p-3 rounded-xl border border-transparent w-full text-xs font-bold focus:outline-none focus:ring-2 focus:ring-[var(--tg-link)]">
+                    <option value="">-- Kanalni tanlang --</option>
+                </select>
+
+                {{-- Kanal yo'q bo'lsa ko'rsatiladigan ogohlantirish --}}
+                <p id="no-channels" class="hidden text-xs leading-relaxed rounded-xl p-3 bg-amber-500/10 text-amber-400">
+                    ⚠️ Tizimga ulangan kanallar topilmadi. Avval botni kanalingizga admin qilib qo'shing.
+                </p>
+            </div>
 
             {{-- Kanalga joylash tugmasi --}}
             <button id="publish-btn" class="tg-btn w-full rounded-xl py-3 font-semibold flex items-center justify-center gap-2">
@@ -188,7 +199,8 @@
         const publishBtn = document.getElementById('publish-btn');
         const resultSection = document.getElementById('result-section');
         const generatedText = document.getElementById('generated-text');
-        const channelIdInput = document.getElementById('channel-id');
+        const channelSelect = document.getElementById('channel-select');
+        const noChannelsMsg = document.getElementById('no-channels');
         const additionalInfo = document.getElementById('additional-info');
         const messageBox = document.getElementById('message');
 
@@ -287,6 +299,39 @@
 
         renderCategories();
         renderMoods();
+
+        // --- Foydalanuvchi kanallarini yuklash (Select'ni to'ldirish) ---
+        async function loadChannels() {
+            try {
+                const res = await fetch('/api/channels', { headers: tgHeaders() });
+                const data = await parseJsonSafe(res);
+                if (!res.ok) return;
+
+                const channels = data.channels || [];
+
+                // Kanal yo'q bo'lsa — Select'ni yashirib, ogohlantirishni ko'rsatamiz.
+                if (channels.length === 0) {
+                    channelSelect.classList.add('hidden');
+                    noChannelsMsg.classList.remove('hidden');
+                    return;
+                }
+
+                // Kanallarni <option> sifatida joylaymiz. value = ichki ID
+                // (backend egalikni tekshirib, telegram_channel_id ni o'zi aniqlaydi).
+                channels.forEach((ch) => {
+                    const opt = document.createElement('option');
+                    opt.value = ch.id;
+                    opt.textContent = ch.channel_name;
+                    channelSelect.appendChild(opt);
+                });
+                channelSelect.classList.remove('hidden');
+                noChannelsMsg.classList.add('hidden');
+            } catch (e) {
+                // Tarmoq xatosi — Select bo'sh (faqat placeholder) qoladi.
+            }
+        }
+
+        loadChannels();
 
         // --- Rasm preview ---
         imageInput.addEventListener('change', () => {
@@ -472,9 +517,9 @@
 
         // --- 2. Kanalga joylash ---
         publishBtn.addEventListener('click', async () => {
-            const channelId = channelIdInput.value.trim();
+            const channelId = channelSelect.value;
             if (!channelId) {
-                showMessage('Kanal ID kiriting.', true);
+                showMessage('Post yuboriladigan kanalni tanlang.', true);
                 return;
             }
 
@@ -486,7 +531,7 @@
                     headers: tgHeaders({ 'Content-Type': 'application/json' }),
                     body: JSON.stringify({
                         post_id: currentPostId,
-                        telegram_channel_id: channelId,
+                        channel_id: Number(channelId),
                         // Tahrirlangan matnni ham yuboramiz (backend qo'llab-quvvatlasa, ishlatadi).
                         generated_text: generatedText.value,
                     }),
